@@ -1,8 +1,17 @@
-To handle missing or inconsistent metadata fields, we can add extra checks and defaults in the script. Specifically, we’ll modify the code to check if the fields like **'author'**, **'family'**, **'given'**, or **publication date** exist before trying to format them. If any data is missing, it will skip that part or use placeholders where needed.
+Search the column "DOI link" and finish "reference" column
 
-Here’s the modified script with enhanced error handling:
+Requirements
+Python installed on your computer.
+Install the requests library to handle API calls and the pandas library to handle Excel files.
+pip install requests pandas
+Steps
+The script will:
 
-```python
+Load the Excel file and read the DOIs from the "DOI" column.
+Query the CrossRef API to retrieve metadata based on each DOI.
+Format the metadata into Harvard citation style.
+Save the updated data to a new Excel file.
+Python Script
 import pandas as pd
 import requests
 import time
@@ -19,50 +28,36 @@ def get_harvard_citation(doi):
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
-            item = data.get('message', {})
+            item = data['message']
             
-            # Extract authors if available
-            if 'author' in item:
-                authors = ', '.join([f"{author.get('family', '')}, {author.get('given', [''])[0]}" for author in item['author'] if 'family' in author and 'given' in author])
-            else:
-                authors = 'Unknown Author'
-
-            # Extract publication year if available
-            year_data = item.get('published-print', item.get('published-online', {'date-parts': [[None]]}))
-            year = year_data['date-parts'][0][0] if year_data['date-parts'][0][0] is not None else 'n.d.'
-
-            # Extract other citation details with fallback values
-            title = item.get('title', ['No Title'])[0]
-            journal = item.get('container-title', ['No Journal'])[0]
-            volume = item.get('volume', 'No Volume')
-            issue = item.get('issue', 'No Issue')
-            pages = item.get('page', 'No Pages')
+            # Construct Harvard style citation
+            authors = ', '.join([f"{author['family']}, {author['given'][0]}." for author in item['author']])
+            year = item.get('published-print', item.get('published-online', {'date-parts': [[None]]}))['date-parts'][0][0]
+            title = item['title'][0]
+            journal = item['container-title'][0] if 'container-title' in item else ''
+            volume = item.get('volume', '')
+            issue = item.get('issue', '')
+            pages = item.get('page', '')
             doi = item.get('DOI', '')
 
-            # Construct Harvard style citation
             citation = f"{authors} ({year}) '{title}', *{journal}*, vol. {volume}, no. {issue}, pp. {pages}. doi:{doi}"
             return citation
         else:
             print(f"Failed to retrieve data for DOI {doi}")
-            return "Reference data unavailable"
+            return None
     except Exception as e:
         print(f"Error fetching data for DOI {doi}: {e}")
-        return "Reference data unavailable"
+        return None
 
 # Apply the function to each DOI and store the results in the "Reference" column
-df['Reference'] = df['DOI'].apply(lambda doi: get_harvard_citation(doi) if pd.notna(doi) else "No DOI provided")
+df['Reference'] = df['DOI'].apply(lambda doi: get_harvard_citation(doi) if pd.notna(doi) else None)
 
 # Save the updated dataframe to a new Excel file
 df.to_excel(output_file_path, index=False)
 print(f"Updated references saved to {output_file_path}")
-```
-
-### Explanation of Changes
-- **Author handling:** Now checks for both `'family'` and `'given'` fields, with fallback text if any are missing.
-- **Year handling:** Ensures a default value (`'n.d.'`) if no publication year is found.
-- **Journal, Volume, Issue, and Page:** Includes placeholders like `'No Journal'` or `'No Pages'` when these fields are missing.
-- **Error Message for Missing Data:** Returns `"Reference data unavailable"` for DOIs that fail to retrieve metadata instead of stopping the script.
-
-### Run Instructions
-1. Replace `your_file_path.xlsx` with your actual Excel file path.
-2. Run this updated script, and it will handle missing fields more gracefully, saving the result to **updated_references.xlsx**.
+Instructions to Run
+Replace "your_file_path.xlsx" in file_path with the path to your Excel file.
+Run this script in your Python environment. It will create a new file, updated_references.xlsx, with the "Reference" column populated in Harvard format.
+Notes
+The script includes a small delay between requests to avoid overwhelming the CrossRef API.
+Check the results as variations in article metadata may lead to minor formatting inconsistencies.
